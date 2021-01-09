@@ -9,6 +9,9 @@ func Bool(b bool) *bool { return &b }
 var (
 	False = Bool(false)
 	True  = Bool(true)
+	// EventSources cointains the valid event sources
+	// An event worker will be created for each source
+	EventSources = [5]string{"scrutinizer", "keykeeper", "ethereum", "vochain", "census"}
 )
 
 const (
@@ -99,8 +102,6 @@ const (
 	// ProcessesContractMaxEnvelopeType represents the max value that a uint8 can have
 	// with the current smart contract bitmask describing the supported envelope types
 	ProcessesContractMaxEnvelopeType = 15
-
-	// TODO: @jordipainan this values are tricky
 
 	// ProcessesContractMinBlockCount represents the minimum number of vochain blocks
 	// that a process should last

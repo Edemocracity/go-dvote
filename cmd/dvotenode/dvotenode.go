@@ -97,6 +97,8 @@ func newConfig() (*config.DvoteCfg, config.Error) {
 	globalCfg.W3Config.Route = *flag.String("w3Route", "/web3", "web3 endpoint API route")
 	globalCfg.W3Config.RPCPort = *flag.Int("w3RPCPort", 9091, "web3 RPC port")
 	globalCfg.W3Config.RPCHost = *flag.String("w3RPCHost", "127.0.0.1", "web3 RPC host")
+	// events
+	globalCfg.Events.SyncEvery = *flag.Int64("eventsSyncEvery", 100, "number of writes per fsync, how often the events are written to disk")
 	// ipfs
 	globalCfg.Ipfs.NoInit = *flag.Bool("ipfsNoInit", false, "disables inter planetary file system support")
 	globalCfg.Ipfs.SyncKey = *flag.String("ipfsSyncKey", "", "enable IPFS cluster synchronization using the given secret key")
@@ -147,6 +149,9 @@ func newConfig() (*config.DvoteCfg, config.Error) {
 		globalCfg.DataDir += "/" + globalCfg.VochainConfig.Chain
 	}
 
+	// set events dbpath
+	globalCfg.Events.DBPath = globalCfg.DataDir + "/events"
+
 	// Add viper config path (now we know it)
 	viper.AddConfigPath(globalCfg.DataDir)
 
@@ -194,6 +199,9 @@ func newConfig() (*config.DvoteCfg, config.Error) {
 	viper.BindPFlag("w3Config.enabled", flag.Lookup("w3Enabled"))
 	viper.BindPFlag("w3Config.RPCPort", flag.Lookup("w3RPCPort"))
 	viper.BindPFlag("w3Config.RPCHost", flag.Lookup("w3RPCHost"))
+
+	// events
+	viper.BindPFlag("events.SyncEvery", flag.Lookup("eventsSyncEvery"))
 
 	// ipfs
 	viper.Set("ipfs.ConfigPath", globalCfg.DataDir+"/ipfs")
@@ -305,6 +313,7 @@ func newConfig() (*config.DvoteCfg, config.Error) {
 	- signing key
 	- ethereum
 	- ethevents
+	- events
 	- vochain
 
   Miner needs:
@@ -567,6 +576,12 @@ func main() {
 				log.Fatal(err)
 			}
 		}
+	}
+
+	if globalCfg.Mode == types.ModeOracle {
+		log.Info("starting events service")
+		service.Events(globalCfg.Events, signer, vnode)
+		log.Info("events service started")
 	}
 
 	log.Info("startup complete")

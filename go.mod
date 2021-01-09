@@ -22,6 +22,7 @@ require (
 	github.com/go-chi/cors v1.1.1
 	github.com/google/go-cmp v0.5.4
 	github.com/google/gopacket v1.1.19 // indirect
+	github.com/google/uuid v1.1.2
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/iden3/go-iden3-core v0.0.8-0.20200325104031-1ed04a261b78
 	github.com/iden3/go-iden3-crypto v0.0.4
@@ -48,6 +49,7 @@ require (
 	github.com/libp2p/go-sockaddr v0.1.0 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/multiformats/go-multiaddr v0.3.1
+	github.com/nsqio/go-diskqueue v1.0.0
 	github.com/pelletier/go-toml v1.6.0 // indirect
 	github.com/prometheus/client_golang v1.9.0
 	github.com/recws-org/recws v1.2.2
