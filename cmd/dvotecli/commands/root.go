@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/logrusorgru/aurora"
@@ -9,9 +8,12 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:              "dvotecli",
-	Short:            "dvote command line interface.",
-	PersistentPreRun: setColor,
+	Use:   "dvotecli",
+	Short: "dvote command line interface.",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		au = aurora.NewAurora(colorize)
+	},
+	SilenceUsage: true,
 }
 
 var au aurora.Aurora
@@ -28,13 +30,7 @@ func init() {
 
 // Execute ...
 func Execute() {
-
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
 		os.Exit(1)
 	}
-}
-
-func setColor(cmd *cobra.Command, args []string) {
-	au = aurora.NewAurora(colorize)
 }

@@ -17,7 +17,7 @@ import (
 )
 
 var genesisGenCmd = &cobra.Command{
-	Use:   "genesis-gen",
+	Use:   "genesis",
 	Short: "Generate keys and genesis for vochain",
 	RunE:  genesisGen,
 }
