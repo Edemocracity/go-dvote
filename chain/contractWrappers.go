@@ -11,10 +11,14 @@ import (
 	ethbind "github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/vocdoni/eth-storage-proof/ethstorageproof"
+	"github.com/vocdoni/eth-storage-proof/token"
 	"golang.org/x/crypto/sha3"
 	"golang.org/x/net/idna"
+	"google.golang.org/protobuf/proto"
 
 	"go.vocdoni.io/dvote/chain/contracts"
+	"go.vocdoni.io/dvote/crypto/ethereum"
 	"go.vocdoni.io/dvote/log"
 	"go.vocdoni.io/dvote/types"
 	"go.vocdoni.io/dvote/util"
@@ -171,11 +175,31 @@ func (ph *VotingHandle) NewProcessTxArgs(ctx context.Context, pid [types.Process
 	if types.CensusOrigins[censusOrigin].NeedsIndexSlot {
 		// evm block height not required here, will be fetched by each user when generating the vote
 		// index slot
-		idxSlot, err := ph.TokenStorageProof.GetBalanceMappingPosition(&ethbind.CallOpts{Context: ctx}, processMeta.EntityAddress)
-		if err != nil || idxSlot == nil {
-			return nil, fmt.Errorf("error fetching token index slot from Ethereum: %w", err)
+
+		// check storage root
+		// get process params signature
+		signature, err := ph.VotingProcess.GetParamsSignature(&ethbind.CallOpts{Context: ctx}, pid)
+		if err != nil {
+			return nil, fmt.Errorf("cannot get process params signature: %w", err)
 		}
-		iSlot32 := uint32(idxSlot.Uint64())
+		// recover signer address
+		processDataBytes, err := proto.Marshal(processData) // TODO: @jordipainan not sure matches Ethereum signed data
+		if err != nil {
+			return nil, fmt.Errorf("cannot check EVM storage root, error marshaling process data: %w", err)
+		}
+		var freeSizeSignature []byte
+		copy(freeSizeSignature, signature[:])
+		recoveredAddr, err := ethereum.AddrFromSignature(processDataBytes, freeSizeSignature)
+		if err != nil {
+			return nil, fmt.Errorf("cannot recover address from signed message: %w", err)
+		}
+		// check valid storage root
+		// the contract index slot provided by the checkEVMProof function
+		iSlot, err := checkEVMProof(ph.EthereumClient, processData.CensusRoot, recoveredAddr, processMeta.EntityAddress, processMeta.EvmBlockHeight)
+		if err != nil {
+			return nil, fmt.Errorf("cannot check EVM storage root: %w", err)
+		}
+		iSlot32 := uint32(iSlot)
 		processData.EthIndexSlot = &iSlot32
 	}
 
@@ -184,6 +208,51 @@ func (ph *VotingHandle) NewProcessTxArgs(ctx context.Context, pid [types.Process
 	processTxArgs.Txtype = models.TxType_NEW_PROCESS
 	processTxArgs.Process = processData
 	return processTxArgs, nil
+}
+
+func checkEVMProof(client *ethclient.Client, roothash []byte, holder common.Address, contractAddr common.Address, block *big.Int) (int32, error) {
+	ts := token.ERC20Token{}
+	ts.Init(context.Background(), "", contractAddr.String())
+	tokenData, err := ts.GetTokenData()
+	if err != nil {
+		return 0, fmt.Errorf("cannot get token data: %w", err)
+	}
+	if tokenData.Decimals < 1 {
+		return 0, fmt.Errorf("cannot fetch decimals")
+	}
+
+	// get holder balance
+	balance, err := ts.Balance(holder)
+	if err != nil {
+		log.Fatal("cannot get holder balance: %w", err)
+	}
+	log.Debug("contract:%s holder:%s balance:%s", contractAddr, holder, balance.String())
+
+	// get index slot
+	slot, amount, err := ts.GetIndexSlot(holder)
+	if err != nil {
+		return 0, fmt.Errorf("cannot get contract index slot: %w", err)
+	}
+	log.Debug("storage data -> slot: %d amount: %s", slot, amount.String())
+
+	// get block
+	blk, err := client.BlockByNumber(context.TODO(), block)
+	if err != nil {
+		return 0, fmt.Errorf("cannot get block at height provided: %w", err)
+	}
+
+	// get proof at block
+	sproof, err := ts.GetProof(context.TODO(), holder, blk)
+	if err != nil {
+		return 0, fmt.Errorf("cannot get storage proof: %w", err)
+	}
+
+	// verify proof
+	pv, err := ethstorageproof.VerifyEIP1186(sproof)
+	if pv {
+		return int32(slot), nil
+	}
+	return 0, fmt.Errorf("account proof is invalid (err %s)", err)
 }
 
 func extractEnvelopeType(envelopeType uint8) (*models.EnvelopeType, error) {
